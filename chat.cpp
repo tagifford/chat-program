@@ -17,13 +17,23 @@
 #include <netdb.h>
 #include <signal.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <iostream>
+#include <arpa/inet.h>
 
 #define PORT "3360"
 
 
 using namespace std;
+
+void sigchld_handler(int s) {
+    int saved_errno = errno;
+    while (waitpid(-1, NULL, WNOHANG) > 0);
+
+    errno = saved_errno;
+}
 
 int server() {
     int sockfd, new_fd;
@@ -36,7 +46,7 @@ int server() {
     int rv;
 
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
@@ -65,12 +75,40 @@ int server() {
         break;          //if we make it this far, we have successfully bound and can exit the loop
     }
 
+
+    if (p == NULL) {
+        cerr << "server: failed to bind\n";
+        return 1;
+    }
+
+    size_t BACKLOG = 1;             // only 1 connection at a time
+    if (listen(sockfd, BACKLOG) == -1) { 
+        cerr << "listen\n";
+        return 1;
+    }
+
+    sa.sa_handler = sigchld_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+        cerr << "sigaction\n";
+        return 1;
+    }
+
+    void *addr;
+    struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
+    char ipstr[INET_ADDRSTRLEN];
+    addr = &(ipv4->sin_addr);
+    cout << "Welcome to Chat!\nWaiting for a connection on\n" << inet_ntop(p->ai_family, addr, ipstr, sizeof(ipstr)) << " port " << PORT << "\n"; 
+
+    return 0;
 }
 
 int main(int argc, char* argv[]){
 
-    if (argc == 0) {
+    if (argc == 1) {
         int server_status = server();
+        return server_status;
     }
 
   return 0;
