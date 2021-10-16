@@ -61,8 +61,16 @@ int server() {
     hints.ai_family = AF_UNSPEC; // don't care IPv4 or IPv6
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
+    char host[256];
+    int hostname = gethostname(host, sizeof(host));
+    if (hostname == -1) {
+        cerr << "gethostname\n";
+        return 1;
+    }
+    struct hostent *host_entry = gethostbyname(host);
+    char *host_ip = inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
 
-    if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0) {
+    if ((rv = getaddrinfo(host_ip, PORT, &hints, &servinfo)) != 0) {
         cerr << "getaddrinfo: " << gai_strerror(rv) << '\n';
         return 1; 
     }
